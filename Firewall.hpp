@@ -1,56 +1,58 @@
 #pragma once
 
+#ifndef RS2AUTOBAN_FIREWALL_HPP
+#define RS2AUTOBAN_FIREWALL_HPP
+
 #include <utility>
 #include <vector>
 #include <string>
+#include <sstream>
 
 #include <windows.h>
 #include <netfw.h>
 
 #include "Utils.hpp"
 
-#pragma comment(lib, "ole32.lib")
-#pragma comment(lib, "oleaut32.lib")
-
 namespace Firewall
 {
+
+inline static const WCHAR* RS2AUTOBAN_RULE_NAME = L"__RS2AUTOBAN_RULE";
+inline static const WCHAR* RS2AUTOBAN_GROUP_NAME = L"__RS2AUTOBAN_GROUP";
+inline static const WCHAR* RS2AUTOBAN_RULE_DESC = L"RS2Autoban automatic rule.";
 
 class GenericError : public std::exception
 {
 public:
-
-    GenericError(std::string msg, HRESULT code) :
-        _msg(std::move(msg)),
+    GenericError(std::wstring msg, HRESULT code) :
+        _message(std::move(msg)),
         _hr(code)
     {};
 
-    const char* what()
+    GenericError(std::string msg, HRESULT code) :
+        _message(Utils::Utf8ToWide(std::move(msg))),
+        _hr(code)
+    {};
+
+    [[nodiscard]] const char* what() const override
     {
         std::stringstream ss;
-        ss << _msg << ": " << Utils::HRESULTToString(_hr)
-           << "(" << _hr << ")";
+        ss << Utils::WideToUtf8(_message) << ": "
+           << Utils::HRESULTToString(_hr)
+           << "(" << std::hex << _hr << ")";
         return ss.str().c_str();
     };
 
+    [[nodiscard]] const WCHAR* w_what() const
+    {
+        std::wstringstream ss;
+        ss << _message << ": " << Utils::HRESULTToWString(_hr)
+           << "(" << std::hex << _hr << ")";
+        return ss.str().c_str();
+    };
 
 private:
-    std::string _msg;
+    std::wstring _message;
     HRESULT _hr;
-};
-
-const WCHAR* RS2AUTOBAN_RULE_NAME = L"__RS2AUTOBAN_RULE";
-const WCHAR* RS2AUTOBAN_GROUP_NAME = L"__RS2AUTOBAN_GROUP";
-const WCHAR* RS2AUTOBAN_RULE_DESC = L"RS2Autoban automatic rule";
-
-class Rule
-{
-public:
-    Rule();
-
-    ~Rule();
-
-private:
-    INetFwRule* _pFwRule;
 };
 
 class Manager
@@ -60,11 +62,9 @@ public:
 
     ~Manager();
 
-    std::vector<Rule> getRules();
+    void addDenyIPRule(const std::wstring& ipAddr);
 
-    void addRule(Rule rule);
-
-    void removeRule(Rule rule);
+    void pruneRules();
 
 private:
     HRESULT WFCOMInitialize(INetFwPolicy2** ppNetFwPolicy2);
@@ -73,9 +73,12 @@ private:
     BSTR _ruleDescription;
     BSTR _ruleGroup;
     BSTR _ruleRemoteAddresses;
-    INetFwPolicy2* _pNetFwPolicy2;
-    INetFwRules* _pFwRules;
+    INetFwPolicy2* _pNetFwPolicy2 = nullptr;
+    INetFwRules* _pNetFwRules = nullptr;
     HRESULT _hrComInit;
+    long _currentProfilesBitMask = 0;
 };
 
 }
+
+#endif //RS2AUTOBAN_FIREWALL_HPP

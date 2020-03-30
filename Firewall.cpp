@@ -1,36 +1,7 @@
-#include <iostream>
 #include <exception>
-#include <sstream>
 
 #include "Firewall.hpp"
 #include "Utils.hpp"
-
-Firewall::Rule::Rule()
-{
-    HRESULT hr;
-
-    hr = CoCreateInstance(
-        __uuidof(NetFwRule),
-        nullptr,
-        CLSCTX_INPROC_SERVER,
-        __uuidof(INetFwRule),
-        (void**) &_pFwRule);
-
-    if (FAILED(hr))
-    {
-        std::wcout << "CoCreateInstance for Firewall Rule failed: "
-                   << Utils::HRESULTToWString(hr);
-    }
-}
-
-Firewall::Rule::~Rule()
-{
-    if (_pFwRule != nullptr)
-    {
-        _pFwRule->Release();
-    }
-}
-
 
 Firewall::Manager::Manager()
 {
@@ -52,8 +23,13 @@ Firewall::Manager::Manager()
         throw std::bad_alloc();
     }
 
+    _ruleRemoteAddresses = SysAllocString(L"");
+    if (_ruleRemoteAddresses == nullptr)
+    {
+        throw std::bad_alloc();
+    }
+
     HRESULT hr = S_OK;
-    long currentProfilesBitMask = 0;
     std::wstringstream ss;
 
     _hrComInit = CoInitializeEx(
@@ -67,7 +43,7 @@ Firewall::Manager::Manager()
         throw Firewall::GenericError("WFCOMInitialize failed", hr);
     }
 
-    hr = _pNetFwPolicy2->get_Rules(&_pFwRules);
+    hr = _pNetFwPolicy2->get_Rules(&_pNetFwRules);
     if (FAILED(hr))
     {
         throw Firewall::GenericError("get_Rules failed", hr);
@@ -87,10 +63,10 @@ Firewall::Manager::Manager()
     // When possible we avoid adding firewall rules to the Public profile.
     // If Public is currently active and it is not the only active profile,
     // we remove it from the bitmask.
-    if ((currentProfilesBitMask & NET_FW_PROFILE2_PUBLIC) &&
-        (currentProfilesBitMask != NET_FW_PROFILE2_PUBLIC))
+    if ((_currentProfilesBitMask & NET_FW_PROFILE2_PUBLIC) &&
+        (_currentProfilesBitMask != NET_FW_PROFILE2_PUBLIC))
     {
-        currentProfilesBitMask ^= NET_FW_PROFILE2_PUBLIC;
+        _currentProfilesBitMask ^= NET_FW_PROFILE2_PUBLIC;
     }
 }
 
@@ -101,9 +77,9 @@ Firewall::Manager::~Manager()
     SysFreeString(_ruleGroup);
     SysFreeString(_ruleRemoteAddresses);
 
-    if (_pFwRules != nullptr)
+    if (_pNetFwRules != nullptr)
     {
-        _pFwRules->Release();
+        _pNetFwRules->Release();
     }
 
     if (_pNetFwPolicy2 != nullptr)
@@ -117,6 +93,66 @@ Firewall::Manager::~Manager()
     }
 }
 
+void Firewall::Manager::addDenyIPRule(const std::wstring& ipAddr)
+{
+    HRESULT hr = S_OK;
+    INetFwRule* pNetFwRule = nullptr;
+    BSTR remoteAddr;
+
+    remoteAddr = SysAllocString(ipAddr.c_str());
+    if (remoteAddr == nullptr)
+    {
+        printf("CoCreateInstance for Firewall Rule failed: 0x%08lx\n", hr);
+        goto Cleanup;
+    }
+
+    hr = CoCreateInstance(
+        __uuidof(NetFwRule),
+        nullptr,
+        CLSCTX_INPROC_SERVER,
+        __uuidof(INetFwRule),
+        (void**) &pNetFwRule);
+
+    if (FAILED(hr))
+    {
+        printf("CoCreateInstance for Firewall Rule failed: 0x%08lx\n", hr);
+        goto Cleanup;
+    }
+
+    pNetFwRule->put_Name(_ruleName);
+    pNetFwRule->put_Description(_ruleDescription);
+    pNetFwRule->put_Grouping(_ruleGroup);
+    pNetFwRule->put_Profiles(_currentProfilesBitMask);
+    pNetFwRule->put_Action(NET_FW_ACTION_BLOCK);
+    pNetFwRule->put_Enabled(VARIANT_TRUE);
+    pNetFwRule->put_RemoteAddresses(remoteAddr);
+
+    hr = _pNetFwRules->Add(pNetFwRule);
+    if (FAILED(hr))
+    {
+        printf("Firewall Rule Add failed: 0x%08lx\n", hr);
+        goto Cleanup;
+    }
+
+    Cleanup:
+
+    if (pNetFwRule != nullptr)
+    {
+        pNetFwRule->Release();
+    }
+
+    SysFreeString(remoteAddr);
+
+    if (FAILED(hr))
+    {
+        throw Firewall::GenericError("adding rule failed", hr);
+    }
+}
+
+void pruneRules()
+{
+
+}
 
 HRESULT Firewall::Manager::WFCOMInitialize(INetFwPolicy2** ppNetFwPolicy2)
 {
