@@ -70,7 +70,6 @@ private:
     BSTR _ruleName;
     BSTR _ruleDescription;
     BSTR _ruleGroup;
-    BSTR _ruleRemoteAddresses;
     INetFwPolicy2* _pNetFwPolicy2 = nullptr;
     INetFwRules* _pNetFwRules = nullptr;
     HRESULT _hrComInit;

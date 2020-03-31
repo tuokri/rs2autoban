@@ -23,12 +23,6 @@ Firewall::Manager::Manager()
         throw std::bad_alloc();
     }
 
-    _ruleRemoteAddresses = SysAllocString(L"");
-    if (_ruleRemoteAddresses == nullptr)
-    {
-        throw std::bad_alloc();
-    }
-
     HRESULT hr = S_OK;
     std::wstringstream ss;
 
@@ -81,7 +75,6 @@ Firewall::Manager::~Manager()
     SysFreeString(_ruleName);
     SysFreeString(_ruleDescription);
     SysFreeString(_ruleGroup);
-    SysFreeString(_ruleRemoteAddresses);
 
     if (_pNetFwRules != nullptr)
     {
