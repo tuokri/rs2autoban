@@ -24,34 +24,32 @@ class GenericError : public std::exception
 {
 public:
     GenericError(std::wstring msg, HRESULT code) :
-        _message(std::move(msg)),
+        _wmsg(std::move(msg)),
         _hr(code)
     {};
 
     GenericError(std::string msg, HRESULT code) :
-        _message(Utils::Utf8ToWide(std::move(msg))),
+        _wmsg(Utils::Utf8ToWide(std::move(msg))),
         _hr(code)
     {};
 
     [[nodiscard]] const char* what() const override
     {
-        std::stringstream ss;
-        ss << Utils::WideToUtf8(_message) << ": "
-           << Utils::HRESULTToString(_hr)
-           << "(" << std::hex << _hr << ")";
-        return ss.str().c_str();
+       return "Firewall::GenericError "
+              "(call w_what() for detailed information)";
     };
 
-    [[nodiscard]] const WCHAR* w_what() const
+    [[nodiscard]] std::wstring w_what() const
     {
         std::wstringstream ss;
-        ss << _message << ": " << Utils::HRESULTToWString(_hr)
-           << "(" << std::hex << _hr << ")";
-        return ss.str().c_str();
+        ss << _wmsg << " "
+           << "(" << std::hex << "0x" << _hr << ") "
+           << Utils::HRESULTToWString(_hr);
+        return ss.str();
     };
 
 private:
-    std::wstring _message;
+    std::wstring _wmsg;
     HRESULT _hr;
 };
 
@@ -62,12 +60,12 @@ public:
 
     ~Manager();
 
-    void addDenyIPRule(const std::wstring& ipAddr);
+    void addBlockInboundAddressRule(const WCHAR* ipAddr);
 
     void pruneRules();
 
 private:
-    HRESULT WFCOMInitialize(INetFwPolicy2** ppNetFwPolicy2);
+    static HRESULT WFCOMInitialize(INetFwPolicy2** ppNetFwPolicy2);
 
     BSTR _ruleName;
     BSTR _ruleDescription;

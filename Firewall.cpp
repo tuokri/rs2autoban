@@ -60,6 +60,12 @@ Firewall::Manager::Manager()
         }
     }
 
+    hr = _pNetFwPolicy2->get_CurrentProfileTypes(&_currentProfilesBitMask);
+    if (FAILED(hr))
+    {
+        throw Firewall::GenericError("get_CurrentProfileTypes failed", hr);
+    }
+
     // When possible we avoid adding firewall rules to the Public profile.
     // If Public is currently active and it is not the only active profile,
     // we remove it from the bitmask.
@@ -93,16 +99,17 @@ Firewall::Manager::~Manager()
     }
 }
 
-void Firewall::Manager::addDenyIPRule(const std::wstring& ipAddr)
+void Firewall::Manager::addBlockInboundAddressRule(const WCHAR* ipAddr)
 {
+    std::string extra;
     HRESULT hr = S_OK;
     INetFwRule* pNetFwRule = nullptr;
     BSTR remoteAddr;
 
-    remoteAddr = SysAllocString(ipAddr.c_str());
+    remoteAddr = SysAllocString(ipAddr);
     if (remoteAddr == nullptr)
     {
-        printf("CoCreateInstance for Firewall Rule failed: 0x%08lx\n", hr);
+        extra = "SysAllocString failed";
         goto Cleanup;
     }
 
@@ -115,7 +122,7 @@ void Firewall::Manager::addDenyIPRule(const std::wstring& ipAddr)
 
     if (FAILED(hr))
     {
-        printf("CoCreateInstance for Firewall Rule failed: 0x%08lx\n", hr);
+        extra = "CoCreateInstance failed";
         goto Cleanup;
     }
 
@@ -124,13 +131,14 @@ void Firewall::Manager::addDenyIPRule(const std::wstring& ipAddr)
     pNetFwRule->put_Grouping(_ruleGroup);
     pNetFwRule->put_Profiles(_currentProfilesBitMask);
     pNetFwRule->put_Action(NET_FW_ACTION_BLOCK);
+    pNetFwRule->put_Direction(NET_FW_RULE_DIR_IN);
     pNetFwRule->put_Enabled(VARIANT_TRUE);
     pNetFwRule->put_RemoteAddresses(remoteAddr);
 
     hr = _pNetFwRules->Add(pNetFwRule);
     if (FAILED(hr))
     {
-        printf("Firewall Rule Add failed: 0x%08lx\n", hr);
+        extra = "Add failed";
         goto Cleanup;
     }
 
@@ -145,7 +153,9 @@ void Firewall::Manager::addDenyIPRule(const std::wstring& ipAddr)
 
     if (FAILED(hr))
     {
-        throw Firewall::GenericError("adding rule failed", hr);
+        std::stringstream ss;
+        ss << "adding rule failed: " << extra;
+        throw Firewall::GenericError(ss.str(), hr);
     }
 }
 
