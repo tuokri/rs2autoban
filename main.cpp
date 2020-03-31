@@ -1,10 +1,14 @@
 #include <iostream>
+#include <string>
 
 #include <QCoreApplication>
 #include <QFileSystemWatcher>
 #include <QCommandLineParser>
 
 #include "Firewall.hpp"
+
+constexpr int DEFAULT_TTL = 3600;
+constexpr int DEFAULT_GRACE_PERIOD = 15;
 
 int __cdecl main(int argc, char* argv[])
 {
@@ -23,7 +27,7 @@ int __cdecl main(int argc, char* argv[])
     parser.addOptions(
         {
             {"l",                   "server log file"},
-            {"t",                   "time to live for bans"},
+            {"t",                   "time to live for bans in seconds"},
             {{"g", "grace-period"}, "seconds to wait after seeing "
                                     "an IP address for the first for valid Steam ID"}
         }
@@ -31,7 +35,27 @@ int __cdecl main(int argc, char* argv[])
 
     parser.process(a);
 
+    const QStringList args = parser.positionalArguments();
+    const QString log{args[0]};
+
+    bool ok;
+    int ttl = args[1].toInt(&ok);
+    if (!ok)
+    {
+        std::cout << "using default TTL (" << ttl << ")\n";
+        ttl = DEFAULT_TTL;
+    }
+
+    int gracePeriod = args[2].toInt(&ok);
+    if (!ok)
+    {
+        std::cout << "using default grade period ("
+                  << DEFAULT_GRACE_PERIOD << ")\n";
+        gracePeriod = DEFAULT_GRACE_PERIOD;
+    }
+
     QFileSystemWatcher watcher;
+    watcher.addPath(log);
 
     std::cout << "initializing firewall manager\n";
     Firewall::Manager manager{};
@@ -51,7 +75,7 @@ int __cdecl main(int argc, char* argv[])
 
     try
     {
-        manager.PruneRules(0);
+        manager.PruneRules(ttl);
     }
     catch (const Firewall::GenericError& e)
     {
