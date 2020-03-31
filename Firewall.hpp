@@ -7,6 +7,8 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <cinttypes>
+#include <regex>
 
 #include <windows.h>
 #include <netfw.h>
@@ -16,9 +18,9 @@
 namespace Firewall
 {
 
-inline static const WCHAR* RS2AUTOBAN_RULE_NAME = L"__RS2AUTOBAN_RULE";
 inline static const WCHAR* RS2AUTOBAN_GROUP_NAME = L"__RS2AUTOBAN_GROUP";
 inline static const WCHAR* RS2AUTOBAN_RULE_DESC = L"RS2Autoban automatic rule.";
+inline static const WCHAR* RS2AUTOBAN_RULE_NAME = L"__RS2AUTOBAN_RULE";
 
 class GenericError : public std::exception
 {
@@ -35,8 +37,8 @@ public:
 
     [[nodiscard]] const char* what() const override
     {
-       return "Firewall::GenericError "
-              "(call w_what() for detailed information)";
+        return "Firewall::GenericError "
+               "(call w_what() for detailed information)";
     };
 
     [[nodiscard]] std::wstring w_what() const
@@ -60,20 +62,37 @@ public:
 
     ~Manager();
 
-    void addBlockInboundAddressRule(const WCHAR* ipAddr);
+    /**
+     * Add rule blocking inbound connections from address.
+     *
+     * @param address Remote address.
+     */
+    void AddBlockInboundAddressRule(const WCHAR* address);
 
-    void pruneRules();
+    /**
+     * Add rule blocking inbound connections from address.
+     *
+     * @param address Remote address.
+     */
+    void AddBlockInboundAddressRule(std::wstring address);
+
+    /**
+     * Prune old rules.
+     *
+     * @param ttl Time to live. Autoban rules older than ttl
+     * are removed from the firewall.
+     */
+    void PruneRules(int64_t ttl);
 
 private:
     static HRESULT WFCOMInitialize(INetFwPolicy2** ppNetFwPolicy2);
 
-    BSTR _ruleName;
-    BSTR _ruleDescription;
     BSTR _ruleGroup;
     INetFwPolicy2* _pNetFwPolicy2 = nullptr;
     INetFwRules* _pNetFwRules = nullptr;
     HRESULT _hrComInit;
     long _currentProfilesBitMask = 0;
+    std::wregex _descDatePattern{L".*\\[(.*)\\].*"};
 };
 
 }

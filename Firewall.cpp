@@ -1,22 +1,17 @@
 #include <exception>
+#include <vector>
+#include <iostream>
+#include <regex>
+
+#include <windows.h>
+#include <atlcomcli.h>
+#include <netfw.h>
 
 #include "Firewall.hpp"
 #include "Utils.hpp"
 
 Firewall::Manager::Manager()
 {
-    _ruleDescription = SysAllocString(RS2AUTOBAN_RULE_DESC);
-    if (_ruleDescription == nullptr)
-    {
-        throw std::bad_alloc();
-    }
-
-    _ruleName = SysAllocString(RS2AUTOBAN_RULE_NAME);
-    if (_ruleName == nullptr)
-    {
-        throw std::bad_alloc();
-    }
-
     _ruleGroup = SysAllocString(RS2AUTOBAN_GROUP_NAME);
     if (_ruleGroup == nullptr)
     {
@@ -72,8 +67,6 @@ Firewall::Manager::Manager()
 
 Firewall::Manager::~Manager()
 {
-    SysFreeString(_ruleName);
-    SysFreeString(_ruleDescription);
     SysFreeString(_ruleGroup);
 
     if (_pNetFwRules != nullptr)
@@ -92,17 +85,40 @@ Firewall::Manager::~Manager()
     }
 }
 
-void Firewall::Manager::addBlockInboundAddressRule(const WCHAR* ipAddr)
+void Firewall::Manager::AddBlockInboundAddressRule(const WCHAR* address)
 {
-    std::string extra;
+    std::wstring extra;
+    std::wstringstream ss;
     HRESULT hr = S_OK;
     INetFwRule* pNetFwRule = nullptr;
-    BSTR remoteAddr;
+    BSTR bstrRuleName = nullptr;
+    BSTR bstrRemoteAddr = nullptr;
+    BSTR bstrRuleDescription = nullptr;
 
-    remoteAddr = SysAllocString(ipAddr);
-    if (remoteAddr == nullptr)
+    bstrRemoteAddr = SysAllocString(address);
+    if (bstrRemoteAddr == nullptr)
     {
-        extra = "SysAllocString failed";
+        extra = L"bstrRemoteAddr SysAllocString failed";
+        goto Cleanup;
+    }
+
+    ss << RS2AUTOBAN_RULE_NAME << L" " << address;
+    bstrRuleName = SysAllocString(ss.str().c_str());
+    ss.str(std::wstring());
+    ss.clear();
+    if (bstrRuleName == nullptr)
+    {
+        extra = L"bstrRuleName SysAllocString failed";
+        goto Cleanup;
+    }
+
+    ss << RS2AUTOBAN_RULE_DESC << L" [" << Utils::ISO8601DateNow() << L"]";
+    bstrRuleDescription = SysAllocString(ss.str().c_str());
+    ss.str(std::wstring());
+    ss.clear();
+    if (bstrRuleDescription == nullptr)
+    {
+        extra = L"bstrRuleDescription SysAllocString failed";
         goto Cleanup;
     }
 
@@ -111,27 +127,27 @@ void Firewall::Manager::addBlockInboundAddressRule(const WCHAR* ipAddr)
         nullptr,
         CLSCTX_INPROC_SERVER,
         __uuidof(INetFwRule),
-        (void**) &pNetFwRule);
+        reinterpret_cast<void**>(&pNetFwRule));
 
     if (FAILED(hr))
     {
-        extra = "CoCreateInstance failed";
+        extra = L"CoCreateInstance failed";
         goto Cleanup;
     }
 
-    pNetFwRule->put_Name(_ruleName);
-    pNetFwRule->put_Description(_ruleDescription);
+    pNetFwRule->put_Name(bstrRuleName);
+    pNetFwRule->put_Description(bstrRuleDescription);
     pNetFwRule->put_Grouping(_ruleGroup);
     pNetFwRule->put_Profiles(_currentProfilesBitMask);
     pNetFwRule->put_Action(NET_FW_ACTION_BLOCK);
     pNetFwRule->put_Direction(NET_FW_RULE_DIR_IN);
     pNetFwRule->put_Enabled(VARIANT_TRUE);
-    pNetFwRule->put_RemoteAddresses(remoteAddr);
+    pNetFwRule->put_RemoteAddresses(bstrRemoteAddr);
 
     hr = _pNetFwRules->Add(pNetFwRule);
     if (FAILED(hr))
     {
-        extra = "Add failed";
+        extra = L"Add failed";
         goto Cleanup;
     }
 
@@ -142,19 +158,143 @@ void Firewall::Manager::addBlockInboundAddressRule(const WCHAR* ipAddr)
         pNetFwRule->Release();
     }
 
-    SysFreeString(remoteAddr);
+    SysFreeString(bstrRemoteAddr);
+    SysFreeString(bstrRuleDescription);
+    SysFreeString(bstrRuleName);
 
     if (FAILED(hr))
     {
-        std::stringstream ss;
-        ss << "adding rule failed: " << extra;
+        ss.str(std::wstring());
+        ss.clear();
+        ss << L"adding rule failed: " << extra;
         throw Firewall::GenericError(ss.str(), hr);
     }
 }
 
-void pruneRules()
+void Firewall::Manager::AddBlockInboundAddressRule(std::wstring address)
 {
+    std::wstring var = std::move(address);
+    Firewall::Manager::AddBlockInboundAddressRule(var.c_str());
+}
 
+void Firewall::Manager::PruneRules(int64_t ttl)
+{
+    HRESULT hr = S_OK;
+
+    ULONG cFetched = 0;
+    CComVariant var;
+    BSTR bstrName = nullptr;
+    BSTR bstrGroup = nullptr;
+    BSTR bstrDesc = nullptr;
+    std::wstring wstrDesc;
+
+    IUnknown* pEnumerator = nullptr;
+    IEnumVARIANT* pVariant = nullptr;
+
+    INetFwRule* pNetFwRule = nullptr;
+
+    long netFwRuleCount;
+
+    _pNetFwPolicy2->get_Rules(&_pNetFwRules);
+    if (FAILED(hr))
+    {
+        goto Cleanup;
+    }
+
+    hr = _pNetFwRules->get_Count(&netFwRuleCount);
+    std::wcout << L"firewall contains total " << netFwRuleCount
+               << L" rules\n";
+    if (FAILED(hr))
+    {
+        goto Cleanup;
+    }
+
+    _pNetFwRules->get__NewEnum(&pEnumerator);
+    if (pEnumerator)
+    {
+        hr = pEnumerator->QueryInterface(
+            __uuidof(IEnumVARIANT),
+            reinterpret_cast<void**>(&pVariant));
+    }
+
+    while (SUCCEEDED(hr) && hr != S_FALSE)
+    {
+        var.Clear();
+        hr = pVariant->Next(1, &var, &cFetched);
+
+        if (S_FALSE != hr)
+        {
+            if (SUCCEEDED(hr))
+            {
+                hr = var.ChangeType(VT_DISPATCH);
+            }
+            if (SUCCEEDED(hr))
+            {
+                hr = (V_DISPATCH(&var))->QueryInterface(
+                    __uuidof(INetFwRule),
+                    reinterpret_cast<void**>(&pNetFwRule));
+            }
+
+            if (SUCCEEDED(hr))
+            {
+                pNetFwRule->get_Grouping(&bstrGroup);
+                if (bstrGroup)
+                {
+                    if (0 == wcscmp(bstrGroup, _ruleGroup))
+                    {
+                        pNetFwRule->get_Description(&bstrDesc);
+                        if (bstrDesc)
+                        {
+                            std::tm ruleDate{};
+                            wstrDesc = std::wstring{bstrDesc, SysStringLen(bstrDesc)};
+
+                            std::wsmatch match;
+                            std::regex_search(wstrDesc, match, _descDatePattern);
+                            std::wstring matchStr = match[1].str();
+                            ruleDate = Utils::ISO8601WStrToTime(matchStr);
+
+                            auto tBegin = std::mktime(&ruleDate);
+                            std::tm now = Utils::DateNow();
+                            auto tNow = std::mktime(&now);
+
+                            if ((tBegin + ttl) < tNow)
+                            {
+                                pNetFwRule->get_Name(&bstrName);
+                                hr = _pNetFwRules->Remove(bstrName);
+                            }
+                        }
+                    }
+                }
+                SysFreeString(bstrName);
+                SysFreeString(bstrGroup);
+                SysFreeString(bstrDesc);
+            }
+        }
+    }
+
+    hr = _pNetFwRules->get_Count(&netFwRuleCount);
+    std::wcout << L"after pruning firewall contains total "
+               << netFwRuleCount << L" rules\n";
+    if (FAILED(hr))
+    {
+        goto Cleanup;
+    }
+
+    Cleanup:
+
+    SysFreeString(bstrName);
+    SysFreeString(bstrGroup);
+    SysFreeString(bstrDesc);
+
+    if (pNetFwRule != nullptr)
+    {
+        pNetFwRule->Release();
+    }
+
+    if (FAILED(hr))
+    {
+        throw Firewall::GenericError("PruneRules failed", hr);
+    }
 }
 
 HRESULT Firewall::Manager::WFCOMInitialize(INetFwPolicy2** ppNetFwPolicy2)
@@ -166,7 +306,7 @@ HRESULT Firewall::Manager::WFCOMInitialize(INetFwPolicy2** ppNetFwPolicy2)
         nullptr,
         CLSCTX_INPROC_SERVER,
         __uuidof(INetFwPolicy2),
-        (void**) ppNetFwPolicy2);
+        reinterpret_cast<void**>(ppNetFwPolicy2));
 
     return hr;
 }
