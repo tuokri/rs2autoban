@@ -3,7 +3,7 @@ project(rs2autoban)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_compile_options(/W4)
+add_compile_options(/W4 /std:c++latest)
 
 find_package(Qt5 COMPONENTS Core REQUIRED)
 

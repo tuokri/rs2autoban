@@ -3,34 +3,33 @@
 #include <QCoreApplication>
 #include <QFileSystemWatcher>
 #include <QCommandLineParser>
-#include <QStringList>
 
 #include "Firewall.hpp"
 
-int __cdecl wmain(int argc, char* argv[])
+int __cdecl main(int argc, char* argv[])
 {
     QCoreApplication a(argc, argv);
     QCoreApplication::setApplicationVersion("0.0.1");
     QCoreApplication::setApplicationName("RS2Autoban");
 
     QCommandLineParser parser;
+
     parser.setApplicationDescription(
         "Automatic banning of malicious IP addresses "
         "from Rising Storm 2: Vietnam server logs.");
     parser.addHelpOption();
     parser.addVersionOption();
-    parser.addPositionalArgument(
-        "log",
-        "server log file");
-    parser.addPositionalArgument(
-        "ttl",
-        "time to live for bans");
 
-    QCommandLineOption gracePeriodOption(
-        QStringList() << "g" << "grace-period",
-        "seconds to wait after seeing an IP address for the "
-        "first time for valid Steam ID");
-    parser.addOption(gracePeriodOption);
+    parser.addOptions(
+        {
+            {"l",                   "server log file"},
+            {"t",                   "time to live for bans"},
+            {{"g", "grace-period"}, "seconds to wait after seeing "
+                                    "an IP address for the first for valid Steam ID"}
+        }
+    );
+
+    parser.process(a);
 
     QFileSystemWatcher watcher;
 
@@ -59,5 +58,5 @@ int __cdecl wmain(int argc, char* argv[])
         std::wcout << e.w_what() << "\n";
     }
 
-    return 0;
+    return QCoreApplication::exec();
 }
