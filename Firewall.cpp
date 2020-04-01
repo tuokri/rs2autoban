@@ -85,7 +85,7 @@ Firewall::Manager::~Manager()
     }
 }
 
-void Firewall::Manager::AddBlockInboundAddressRule(const WCHAR* address)
+void Firewall::Manager::addBlockInboundAddressRule(const WCHAR* address)
 {
     std::wstring extra;
     std::wstringstream ss;
@@ -171,13 +171,14 @@ void Firewall::Manager::AddBlockInboundAddressRule(const WCHAR* address)
     }
 }
 
-void Firewall::Manager::AddBlockInboundAddressRule(std::wstring address)
+void Firewall::Manager::addBlockInboundAddressRule(std::wstring address)
 {
     std::wstring var = std::move(address);
-    Firewall::Manager::AddBlockInboundAddressRule(var.c_str());
+    Firewall::Manager::addBlockInboundAddressRule(var.c_str());
 }
 
-void Firewall::Manager::PruneRules(int64_t ttl)
+// TODO: Refactor.
+void Firewall::Manager::pruneRules(int64_t ttl)
 {
     HRESULT hr = S_OK;
 
@@ -293,7 +294,7 @@ void Firewall::Manager::PruneRules(int64_t ttl)
 
     if (FAILED(hr))
     {
-        throw Firewall::GenericError("PruneRules failed", hr);
+        throw Firewall::GenericError("pruneRules failed", hr);
     }
 }
 

@@ -67,14 +67,14 @@ public:
      *
      * @param address Remote address.
      */
-    void AddBlockInboundAddressRule(const WCHAR* address);
+    void addBlockInboundAddressRule(const WCHAR* address);
 
     /**
      * Add rule blocking inbound connections from address.
      *
      * @param address Remote address.
      */
-    void AddBlockInboundAddressRule(std::wstring address);
+    void addBlockInboundAddressRule(std::wstring address);
 
     /**
      * Prune old rules.
@@ -82,7 +82,7 @@ public:
      * @param ttl Time to live. Autoban rules older than ttl
      * are removed from the firewall.
      */
-    void PruneRules(int64_t ttl);
+    void pruneRules(int64_t ttl);
 
 private:
     static HRESULT WFCOMInitialize(INetFwPolicy2** ppNetFwPolicy2);

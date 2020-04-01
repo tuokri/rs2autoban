@@ -6,6 +6,7 @@
 #include <QCommandLineParser>
 
 #include "Firewall.hpp"
+#include "LogWatcher.hpp"
 
 constexpr int DEFAULT_TTL = 3600;
 constexpr int DEFAULT_GRACE_PERIOD = 15;
@@ -54,32 +55,31 @@ int __cdecl main(int argc, char* argv[])
         gracePeriod = DEFAULT_GRACE_PERIOD;
     }
 
-    QFileSystemWatcher watcher;
-    watcher.addPath(log);
+    LogWatcher watcher;
+    watcher.addLogPath(log);
 
     std::cout << "initializing firewall manager\n";
-    Firewall::Manager manager{};
+    Firewall::Manager manager;
     std::cout << "firewall manager initialized\n";
 
     try
     {
-        manager.AddBlockInboundAddressRule(L"192.168.1.233");
-        manager.AddBlockInboundAddressRule(L"192.168.1.234");
-        manager.AddBlockInboundAddressRule(L"192.168.1.235");
+        manager.addBlockInboundAddressRule(L"192.168.1.233");
+        manager.addBlockInboundAddressRule(L"192.168.1.234");
+        manager.addBlockInboundAddressRule(L"192.168.1.235");
     }
     catch (const Firewall::GenericError& e)
     {
         std::wcout << e.w_what() << "\n";
-        std::cout << e.what() << "\n";
     }
 
     try
     {
-        manager.PruneRules(ttl);
+        manager.pruneRules(ttl);
     }
     catch (const Firewall::GenericError& e)
     {
-        std::wcout << e.w_what() << "\n";
+        std::wcout << e.w_what();
     }
 
     return QCoreApplication::exec();
