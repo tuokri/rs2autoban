@@ -33,3 +33,11 @@
 
 # Clion
 .idea
+
+# Visual Studio
+.vs
+out
+
+# CMake
+cmake-build-debug
+cmake-build-release
