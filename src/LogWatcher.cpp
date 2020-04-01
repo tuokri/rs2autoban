@@ -47,6 +47,7 @@ void LogWatcher::onLogChanged(const QString& path)
         }
     }
 
-    // parse log, check if there are
+    // Parse log continuing from bookmark, check if there are
+    // IP addresses that are not associated with Steam IDs.
     emit nonPlayerAddressFound("");
 }
