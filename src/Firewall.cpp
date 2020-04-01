@@ -3,7 +3,7 @@
 #include <iostream>
 #include <regex>
 
-#include <windows.h>
+#include <Windows.h>
 #include <atlcomcli.h>
 #include <netfw.h>
 

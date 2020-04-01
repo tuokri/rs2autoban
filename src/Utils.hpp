@@ -6,7 +6,7 @@
 #include <string>
 #include <ctime>
 
-#include <windows.h>
+#include <Windows.h>
 
 namespace Utils
 {

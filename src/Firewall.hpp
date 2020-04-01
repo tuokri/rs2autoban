@@ -10,7 +10,7 @@
 #include <cinttypes>
 #include <regex>
 
-#include <windows.h>
+#include <Windows.h>
 #include <netfw.h>
 
 #include "Utils.hpp"
