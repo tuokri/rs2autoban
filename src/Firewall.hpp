@@ -13,7 +13,13 @@
 #include <Windows.h>
 #include <netfw.h>
 
+#include <QObject>
+#include <QTimer>
+#include <QLoggingCategory>
+
 #include "Utils.hpp"
+
+Q_DECLARE_LOGGING_CATEGORY(fwGeneric)
 
 namespace Firewall
 {
@@ -41,13 +47,13 @@ public:
                "(call w_what() for detailed information)";
     };
 
-    [[nodiscard]] std::wstring w_what() const
+    [[nodiscard]] const WCHAR* w_what() const
     {
         std::wstringstream ss;
-        ss << _wmsg << " "
-           << "(" << std::hex << "0x" << _hr << ") "
-           << Utils::HRESULTToWString(_hr);
-        return ss.str();
+        ss << _wmsg << L" "
+           << L"(" << _hr << L") "
+           << Utils::HRESULTToWString(_hr) << L'\0';
+        return ss.str().c_str();
     };
 
 private:
@@ -55,12 +61,17 @@ private:
     HRESULT _hr;
 };
 
-class Manager
+class Manager : public QObject
 {
-public:
-    Manager();
+Q_OBJECT
 
-    ~Manager();
+public:
+
+    explicit Manager(uint64_t ttl = DEFAULT_TTL,
+                     uint64_t gracePeriod = DEFAULT_GRACE_PERIOD,
+                     QObject* parent = nullptr);
+
+    ~Manager() override;
 
     /**
      * Add rule blocking inbound connections from address.
@@ -77,12 +88,24 @@ public:
     void addBlockInboundAddressRule(std::wstring address);
 
     /**
+     * Add rule blocking inbound connections from address.
+     *
+     * @param address Remote address.
+     */
+    void addBlockInboundAddressRule(const QString& address);
+
+    static const int DEFAULT_TTL = 3600;
+    static const int DEFAULT_GRACE_PERIOD = 15;
+
+public slots:
+
+    /**
      * Prune old rules.
      *
      * @param ttl Time to live. Autoban rules older than ttl
      * are removed from the firewall.
      */
-    void pruneRules(int64_t ttl);
+    void pruneRules(int64_t ttl = DEFAULT_TTL);
 
 private:
     static HRESULT WFCOMInitialize(INetFwPolicy2** ppNetFwPolicy2);
@@ -93,6 +116,9 @@ private:
     HRESULT _hrComInit;
     long _currentProfilesBitMask = 0;
     std::wregex _descDatePattern{L".*\\[(.*)\\].*"};
+    uint64_t _ttl = DEFAULT_TTL;
+    uint64_t _gracePeriod = DEFAULT_GRACE_PERIOD;
+    QTimer* _pruneTimer;
 };
 
 }

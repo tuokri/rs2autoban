@@ -1,15 +1,20 @@
-#include <iostream>
-#include <string>
+#include <cinttypes>
 
 #include <QCoreApplication>
 #include <QFileSystemWatcher>
 #include <QCommandLineParser>
+#include <QLoggingCategory>
+
+Q_DECLARE_LOGGING_CATEGORY(mainProg)
+
+Q_LOGGING_CATEGORY(mainProg, "Main")
+
+#ifdef HAVE_VLD
+// #include "vld.h"
+#endif
 
 #include "Firewall.hpp"
 #include "LogWatcher.hpp"
-
-constexpr int DEFAULT_TTL = 3600;
-constexpr int DEFAULT_GRACE_PERIOD = 15;
 
 int __cdecl main(int argc, char* argv[])
 {
@@ -21,46 +26,79 @@ int __cdecl main(int argc, char* argv[])
 
     parser.setApplicationDescription(
         "Automatic banning of malicious IP addresses "
-        "from Rising Storm 2: Vietnam server logs.");
+        "from Rising Storm 2: Vietnam dedicated server logs.");
     parser.addHelpOption();
     parser.addVersionOption();
+    QCommandLineOption logOption{
+        {"l", "log"},
+        "server log file path to watch"};
+    parser.addOption(logOption);
 
-    parser.addOptions(
-        {
-            {"l",                   "server log file"},
-            {"t",                   "time to live for bans in seconds"},
-            {{"g", "grace-period"}, "seconds to wait after seeing "
-                                    "an IP address for the first for valid Steam ID"}
-        }
-    );
+    QCommandLineOption ttlOption{
+        {"t", "ttl"},
+        "time to live for block rules in seconds"};
+    parser.addOption(ttlOption);
+
+    QCommandLineOption gracePeriodOption{
+        {"g", "grace-period"},
+        "grace period after finding new address in seconds"};
+    parser.addOption(gracePeriodOption);
 
     parser.process(a);
 
-    const QStringList args = parser.positionalArguments();
-    const QString log{args[0]};
-
-    bool ok;
-    int ttl = args[1].toInt(&ok);
-    if (!ok)
+    QStringList logs;
+    if (parser.isSet(logOption))
     {
-        std::cout << "using default TTL (" << ttl << ")\n";
-        ttl = DEFAULT_TTL;
+        qCDebug(mainProg) << "logOption is set";
+        logs = parser.values(logOption);
+        qCDebug(mainProg) << logs.size() << "log value(s)";
     }
 
-    int gracePeriod = args[2].toInt(&ok);
+    bool ok = false;
+    uint64_t ttl = Firewall::Manager::DEFAULT_TTL;
+    if (parser.isSet(ttlOption))
+    {
+        ttl = parser.value(ttlOption).toULongLong(&ok);
+    }
     if (!ok)
     {
-        std::cout << "using default grade period ("
-                  << DEFAULT_GRACE_PERIOD << ")\n";
-        gracePeriod = DEFAULT_GRACE_PERIOD;
+        ttl = Firewall::Manager::DEFAULT_TTL;
+        qCInfo(mainProg) << "using default TTL"
+                         << Firewall::Manager::DEFAULT_TTL;
+    }
+
+    ok = false;
+    uint64_t gracePeriod = Firewall::Manager::DEFAULT_GRACE_PERIOD;
+    if (parser.isSet(gracePeriodOption))
+    {
+        gracePeriod = parser.value(gracePeriodOption).toULongLong(&ok);
+    }
+    if (!ok)
+    {
+        gracePeriod = Firewall::Manager::DEFAULT_GRACE_PERIOD;
+        qCInfo(mainProg) << "using default grace period"
+                         << Firewall::Manager::DEFAULT_GRACE_PERIOD;
     }
 
     LogWatcher watcher;
-    watcher.addLogPath(log);
+    ok = false;
+    for (const QString& log : logs)
+    {
+        ok = watcher.addLogPath(log);
+        if (ok)
+        {
+            qCInfo(mainProg) << "watching" << log;
+        }
+        else
+        {
+            qCWarning(mainProg) << "error adding"
+                                << log << "to watch list";
+        }
+    }
 
-    std::cout << "initializing firewall manager\n";
-    Firewall::Manager manager;
-    std::cout << "firewall manager initialized\n";
+    qCDebug(mainProg) << "initializing firewall manager";
+    Firewall::Manager manager{ttl, gracePeriod};
+    qCDebug(mainProg) << "firewall manager initialized";
 
     try
     {
@@ -70,7 +108,7 @@ int __cdecl main(int argc, char* argv[])
     }
     catch (const Firewall::GenericError& e)
     {
-        std::wcout << e.w_what() << "\n";
+        qCWarning(mainProg) << e.w_what();
     }
 
     try
@@ -79,7 +117,7 @@ int __cdecl main(int argc, char* argv[])
     }
     catch (const Firewall::GenericError& e)
     {
-        std::wcout << e.w_what();
+        qCWarning(mainProg) << e.w_what();
     }
 
     return QCoreApplication::exec();

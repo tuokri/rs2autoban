@@ -1,6 +1,5 @@
 #include <exception>
 #include <vector>
-#include <iostream>
 #include <regex>
 
 #include <Windows.h>
@@ -10,11 +9,16 @@
 #include "Firewall.hpp"
 #include "Utils.hpp"
 
-Firewall::Manager::Manager()
+Q_LOGGING_CATEGORY(fwGeneric, "Firewall.Generic")
+
+Firewall::Manager::Manager(uint64_t ttl, uint64_t gracePeriod, QObject* parent)
+    : QObject(parent), _ttl(ttl),
+      _gracePeriod(gracePeriod), _pruneTimer(new QTimer())
 {
     _ruleGroup = SysAllocString(RS2AUTOBAN_GROUP_NAME);
     if (_ruleGroup == nullptr)
     {
+        qCWarning(fwGeneric) << "";
         throw std::bad_alloc();
     }
 
@@ -58,11 +62,19 @@ Firewall::Manager::Manager()
     // When possible we avoid adding firewall rules to the Public profile.
     // If Public is currently active and it is not the only active profile,
     // we remove it from the bitmask.
-    if ((_currentProfilesBitMask & NET_FW_PROFILE2_PUBLIC) &&
+    if ((_currentProfilesBitMask & NET_FW_PROFILE2_PUBLIC) && // NOLINT(hicpp-signed-bitwise)
         (_currentProfilesBitMask != NET_FW_PROFILE2_PUBLIC))
     {
-        _currentProfilesBitMask ^= NET_FW_PROFILE2_PUBLIC;
+        _currentProfilesBitMask ^= NET_FW_PROFILE2_PUBLIC; // NOLINT(hicpp-signed-bitwise)
     }
+
+    // TODO: Modularize?
+    _pruneTimer->setInterval(60 * 1000);
+    _pruneTimer->setSingleShot(false);
+    _pruneTimer->start();
+
+    connect(_pruneTimer, &QTimer::timeout, this, [this]()
+    { this->pruneRules(); });
 }
 
 Firewall::Manager::~Manager()
@@ -83,10 +95,14 @@ Firewall::Manager::~Manager()
     {
         CoUninitialize();
     }
+
+    delete _pruneTimer;
 }
 
 void Firewall::Manager::addBlockInboundAddressRule(const WCHAR* address)
 {
+    qCDebug(fwGeneric) << "adding rule" << QString::fromWCharArray(address);
+
     std::wstring extra;
     std::wstringstream ss;
     HRESULT hr = S_OK;
@@ -166,7 +182,9 @@ void Firewall::Manager::addBlockInboundAddressRule(const WCHAR* address)
     {
         ss.str(std::wstring());
         ss.clear();
-        ss << L"adding rule failed: " << extra;
+        ss << extra;
+        qCDebug(fwGeneric) << "adding rule failed:" << extra
+                           << Utils::HRESULTToWString(hr);
         throw Firewall::GenericError(ss.str(), hr);
     }
 }
@@ -175,6 +193,13 @@ void Firewall::Manager::addBlockInboundAddressRule(std::wstring address)
 {
     std::wstring var = std::move(address);
     Firewall::Manager::addBlockInboundAddressRule(var.c_str());
+}
+
+void Firewall::Manager::addBlockInboundAddressRule(const QString& address)
+{
+    WCHAR* var = nullptr;
+    address.toWCharArray(var);
+    Firewall::Manager::addBlockInboundAddressRule(var);
 }
 
 // TODO: Refactor.
@@ -203,8 +228,8 @@ void Firewall::Manager::pruneRules(int64_t ttl)
     }
 
     hr = _pNetFwRules->get_Count(&netFwRuleCount);
-    std::wcout << L"firewall contains total " << netFwRuleCount
-               << L" rules\n";
+    qCInfo(fwGeneric) << "firewall contains total" << netFwRuleCount
+                      << "rules";
     if (FAILED(hr))
     {
         goto Cleanup;
@@ -223,7 +248,7 @@ void Firewall::Manager::pruneRules(int64_t ttl)
         var.Clear();
         hr = pVariant->Next(1, &var, &cFetched);
 
-        if (S_FALSE != hr)
+        if (hr != S_FALSE)
         {
             if (SUCCEEDED(hr))
             {
@@ -261,6 +286,7 @@ void Firewall::Manager::pruneRules(int64_t ttl)
                             if ((tBegin + ttl) < tNow)
                             {
                                 pNetFwRule->get_Name(&bstrName);
+                                qCDebug(fwGeneric) << "pruning rule" << bstrName;
                                 hr = _pNetFwRules->Remove(bstrName);
                             }
                         }
@@ -274,8 +300,9 @@ void Firewall::Manager::pruneRules(int64_t ttl)
     }
 
     hr = _pNetFwRules->get_Count(&netFwRuleCount);
-    std::wcout << L"after pruning firewall contains total "
-               << netFwRuleCount << L" rules\n";
+    qCInfo(fwGeneric) << "after pruning firewall contains total"
+                      << netFwRuleCount << "rules";
+
     if (FAILED(hr))
     {
         goto Cleanup;
@@ -300,14 +327,10 @@ void Firewall::Manager::pruneRules(int64_t ttl)
 
 HRESULT Firewall::Manager::WFCOMInitialize(INetFwPolicy2** ppNetFwPolicy2)
 {
-    HRESULT hr = S_OK;
-
-    hr = CoCreateInstance(
+    return CoCreateInstance(
         __uuidof(NetFwPolicy2),
         nullptr,
         CLSCTX_INPROC_SERVER,
         __uuidof(INetFwPolicy2),
         reinterpret_cast<void**>(ppNetFwPolicy2));
-
-    return hr;
 }

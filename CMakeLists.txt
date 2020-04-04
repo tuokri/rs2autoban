@@ -3,14 +3,15 @@ project(rs2autoban)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_compile_options(/W4 /std:c++latest)
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
 
-find_package(Qt5 COMPONENTS Core REQUIRED)
+add_compile_options("/W4" "/std:c++latest"
+        "$<$<CONFIG:RELEASE>:/O2;-DQT_NO_DEBUG_OUTPUT>")
+
+find_package(Qt5 COMPONENTS Core Sql REQUIRED)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
-
-set(Qt5Core_COMPILE_DEFINITIONS console)
 
 add_subdirectory(src)

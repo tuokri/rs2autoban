@@ -9,7 +9,13 @@
 #include <QMap>
 #include <QString>
 #include <QDateTime>
+#include <QTimer>
 #include <QFileSystemWatcher>
+#include <QLoggingCategory>
+
+Q_DECLARE_LOGGING_CATEGORY(lwDb)
+
+Q_DECLARE_LOGGING_CATEGORY(lwGeneric)
 
 class LogWatcher : public QObject
 {
@@ -17,7 +23,9 @@ Q_OBJECT
 
 public:
 
-    LogWatcher();
+    explicit LogWatcher(QObject* parent = nullptr);
+
+    ~LogWatcher() override;
 
     bool addLogPath(const QString& file);
 
@@ -33,8 +41,11 @@ private slots:
 
 private:
     QFileSystemWatcher* _watcher;
-    QMap<QString, uint64_t> _pathToBookmark;
-    QMap<QString, QDateTime> _pathToOpenDate;
+    QTimer* _pruneTimer;
+    QMap<QString, uint64_t> _pathToBookmark{};
+    QMap<QString, QDateTime> _pathToOpenDate{};
+
+    const QString _dbDriver{"QSQLITE"};
 };
 
 #endif //RS2AUTOBAN_LOGWATCHER_HPP
