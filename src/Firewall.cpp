@@ -18,7 +18,7 @@ Firewall::Manager::Manager(uint64_t ttl, uint64_t gracePeriod, QObject* parent)
     _ruleGroup = SysAllocString(RS2AUTOBAN_GROUP_NAME);
     if (_ruleGroup == nullptr)
     {
-        qCWarning(fwGeneric) << "";
+        qCWarning(fwGeneric) << "unable to allocate memory for _ruleGroup";
         throw std::bad_alloc();
     }
 
