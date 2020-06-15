@@ -31,17 +31,20 @@ int __cdecl main(int argc, char* argv[])
     parser.addVersionOption();
     QCommandLineOption logOption{
         {"l", "log"},
-        "server log file path to watch"};
+        "server log file path to watch",
+        "log"};
     parser.addOption(logOption);
 
     QCommandLineOption ttlOption{
         {"t", "ttl"},
-        "time to live for block rules in seconds"};
+        "time to live for block rules in seconds",
+        "ttl"};
     parser.addOption(ttlOption);
 
     QCommandLineOption gracePeriodOption{
         {"g", "grace-period"},
-        "grace period after finding new address in seconds"};
+        "grace period after finding new address in seconds",
+        "gracePeriod"};
     parser.addOption(gracePeriodOption);
 
     parser.process(a);
@@ -108,7 +111,7 @@ int __cdecl main(int argc, char* argv[])
     }
     catch (const Firewall::GenericError& e)
     {
-        qCWarning(mainProg) << e.w_what();
+        qCWarning(mainProg) << QString::fromStdWString(e.w_what());
     }
 
     try
@@ -117,7 +120,7 @@ int __cdecl main(int argc, char* argv[])
     }
     catch (const Firewall::GenericError& e)
     {
-        qCWarning(mainProg) << e.w_what();
+        qCWarning(mainProg) << QString::fromStdWString(e.w_what());
     }
 
     return QCoreApplication::exec();

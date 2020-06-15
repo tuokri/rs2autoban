@@ -40,11 +40,11 @@ private slots:
     void onLogChanged(const QString& path);
 
 private:
+    bool _loadCache();
+
     QFileSystemWatcher* _watcher;
-    QTimer* _pruneTimer;
     QMap<QString, uint64_t> _pathToBookmark{};
     QMap<QString, QDateTime> _pathToOpenDate{};
-
     const QString _dbDriver{"QSQLITE"};
 };
 

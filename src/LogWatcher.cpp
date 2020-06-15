@@ -2,6 +2,7 @@
 
 #include <QTimer>
 #include <QSqlDatabase>
+#include <QSqlQuery>
 
 #include "LogWatcher.hpp"
 
@@ -13,26 +14,17 @@ namespace fs = std::filesystem;
 
 LogWatcher::LogWatcher(QObject* parent)
     : QObject(parent),
-      _watcher(new QFileSystemWatcher()),
-      _pruneTimer(new QTimer(this))
+      _watcher(new QFileSystemWatcher())
 {
-    if (!QSqlDatabase::isDriverAvailable(_dbDriver))
-    {
-        qCWarning(lwDb) << "driver" << _dbDriver
-                        << "is not available";
-    }
-    // Load cached bookmark & log open date from database.
+    _loadCache();
 
     connect(_watcher, &QFileSystemWatcher::fileChanged,
             this, &LogWatcher::onLogChanged);
-
-    _pruneTimer->start(60 * 1000);
 }
 
 LogWatcher::~LogWatcher()
 {
     delete _watcher;
-    delete _pruneTimer;
 }
 
 bool LogWatcher::addLogPath(const QString& file)
@@ -88,4 +80,45 @@ void LogWatcher::onLogChanged(const QString& path)
     // Parse log continuing from bookmark, check if there are
     // IP addresses that are not associated with Steam IDs.
     emit nonPlayerAddressFound("");
+}
+
+bool LogWatcher::_loadCache()
+{
+    qCInfo(lwDb) << "loading cache";
+
+    if (!QSqlDatabase::isDriverAvailable(_dbDriver))
+    {
+        qCWarning(lwDb) << "driver" << _dbDriver << "is not available";
+        return false;
+    }
+
+    QSqlDatabase db = QSqlDatabase::addDatabase(_dbDriver);
+    db.setDatabaseName("rs2autoban.db");
+
+    if (!db.open())
+    {
+        qCWarning(lwDb) << "cannot open database";
+        return false;
+    }
+
+    QSqlQuery query(db);
+    query.exec("PRAGMA schema.page_count");
+    if (query.isActive())
+    {
+        while (query.next())
+        {
+            qCInfo(lwDb) << query.value(0).toString();
+        }
+    }
+
+    query.exec("PRAGMA schema.page_size");
+    if (query.isActive())
+    {
+        while (query.next())
+        {
+            qCInfo(lwDb) << query.value(0).toString();
+        }
+    }
+
+    return true;
 }

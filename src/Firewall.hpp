@@ -31,6 +31,7 @@ inline static const WCHAR* RS2AUTOBAN_RULE_NAME = L"__RS2AUTOBAN_RULE";
 class GenericError : public std::exception
 {
 public:
+
     GenericError(std::wstring msg, HRESULT code) :
         _wmsg(std::move(msg)),
         _hr(code)
@@ -47,16 +48,17 @@ public:
                "(call w_what() for detailed information)";
     };
 
-    [[nodiscard]] const WCHAR* w_what() const
+    [[nodiscard]] std::wstring w_what() const
     {
         std::wstringstream ss;
         ss << _wmsg << L" "
-           << L"(" << _hr << L") "
+           << L"(0x" << std::hex << _hr << L") "
            << Utils::HRESULTToWString(_hr) << L'\0';
-        return ss.str().c_str();
+        return ss.str();
     };
 
 private:
+
     std::wstring _wmsg;
     HRESULT _hr;
 };
@@ -108,6 +110,7 @@ public slots:
     void pruneRules(int64_t ttl = DEFAULT_TTL);
 
 private:
+
     static HRESULT WFCOMInitialize(INetFwPolicy2** ppNetFwPolicy2);
 
     BSTR _ruleGroup;
