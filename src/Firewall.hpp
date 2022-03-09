@@ -28,7 +28,7 @@ inline static const WCHAR* RS2AUTOBAN_GROUP_NAME = L"__RS2AUTOBAN_GROUP";
 inline static const WCHAR* RS2AUTOBAN_RULE_DESC = L"RS2Autoban automatic rule.";
 inline static const WCHAR* RS2AUTOBAN_RULE_NAME = L"__RS2AUTOBAN_RULE";
 
-class GenericError : public std::exception
+class GenericError: public std::exception
 {
 public:
 
@@ -63,7 +63,7 @@ private:
     HRESULT _hr;
 };
 
-class Manager : public QObject
+class Manager: public QObject
 {
 Q_OBJECT
 
@@ -107,7 +107,7 @@ public slots:
      * @param ttl Time to live. Autoban rules older than ttl
      * are removed from the firewall.
      */
-    void pruneRules(int64_t ttl = DEFAULT_TTL);
+    void pruneRules(uint64_t ttl = DEFAULT_TTL);
 
 private:
 

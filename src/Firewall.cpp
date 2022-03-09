@@ -60,7 +60,7 @@ Firewall::Manager::Manager(uint64_t ttl, uint64_t gracePeriod, QObject* parent)
     }
 
     // When possible we avoid adding firewall rules to the Public profile.
-    // If Public is currently active and it is not the only active profile,
+    // If Public is currently active, and it is not the only active profile,
     // we remove it from the bitmask.
     if ((_currentProfilesBitMask & NET_FW_PROFILE2_PUBLIC) && // NOLINT(hicpp-signed-bitwise)
         (_currentProfilesBitMask != NET_FW_PROFILE2_PUBLIC))
@@ -203,8 +203,15 @@ void Firewall::Manager::addBlockInboundAddressRule(const QString& address)
 }
 
 // TODO: Refactor.
-void Firewall::Manager::pruneRules(int64_t ttl)
+void Firewall::Manager::pruneRules(uint64_t ttl)
 {
+    if (ttl > INT64_MAX)
+    {
+        qCWarning(fwGeneric) << "TTL larger than INT64_MAX, clamping to INT64_MAX";
+        ttl = INT64_MAX;
+    }
+    auto sanitizedTtl = static_cast<int64_t>(ttl);
+
     HRESULT hr = S_OK;
 
     ULONG cFetched = 0;
@@ -283,7 +290,7 @@ void Firewall::Manager::pruneRules(int64_t ttl)
                             std::tm now = Utils::DateNow();
                             auto tNow = std::mktime(&now);
 
-                            if ((tBegin + ttl) < tNow)
+                            if ((tBegin + sanitizedTtl) < tNow)
                             {
                                 pNetFwRule->get_Name(&bstrName);
                                 qCDebug(fwGeneric) << "pruning rule" << bstrName;

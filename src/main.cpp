@@ -9,10 +9,6 @@ Q_DECLARE_LOGGING_CATEGORY(mainProg)
 
 Q_LOGGING_CATEGORY(mainProg, "Main")
 
-#ifdef HAVE_VLD
-// #include "vld.h"
-#endif
-
 #include "Firewall.hpp"
 #include "LogWatcher.hpp"
 
@@ -85,7 +81,7 @@ int __cdecl main(int argc, char* argv[])
 
     LogWatcher watcher;
     ok = false;
-    for (const QString& log : logs)
+    for (const QString& log: logs)
     {
         ok = watcher.addLogPath(log);
         if (ok)

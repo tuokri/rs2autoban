@@ -17,7 +17,7 @@ Q_DECLARE_LOGGING_CATEGORY(lwDb)
 
 Q_DECLARE_LOGGING_CATEGORY(lwGeneric)
 
-class LogWatcher : public QObject
+class LogWatcher: public QObject
 {
 Q_OBJECT
 
