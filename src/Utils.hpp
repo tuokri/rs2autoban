@@ -15,6 +15,8 @@ std::wstring HRESULTToWString(HRESULT hr);
 
 std::wstring Utf8ToWide(std::string str);
 
+std::wstring TmToISO8601WStr(std::tm tm);
+
 std::wstring ISO8601DateNow();
 
 std::tm DateNow();
@@ -22,6 +24,8 @@ std::tm DateNow();
 std::tm ISO8601WStrToTime(const WCHAR* str);
 
 std::tm ISO8601WStrToTime(std::wstring str);
+
+bool IsValidTm(const std::tm& tm);
 
 }
 

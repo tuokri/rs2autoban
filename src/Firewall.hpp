@@ -68,12 +68,15 @@ class Manager: public QObject
 Q_OBJECT
 
 public:
-
     explicit Manager(uint64_t ttl = DEFAULT_TTL,
                      uint64_t gracePeriod = DEFAULT_GRACE_PERIOD,
                      QObject* parent = nullptr);
 
     ~Manager() override;
+
+    void setTtl(uint64_t ttl);
+
+    void setGracePeriod(uint64_t gracePeriod);
 
     /**
      * Add rule blocking inbound connections from address.
@@ -96,10 +99,18 @@ public:
      */
     void addBlockInboundAddressRule(const QString& address);
 
-    static const int DEFAULT_TTL = 3600;
-    static const int DEFAULT_GRACE_PERIOD = 15;
+    static const unsigned DEFAULT_TTL = 3600U;
+    static const unsigned DEFAULT_GRACE_PERIOD = 15U;
+
+private:
+
+    static HRESULT WFCOMInitialize(INetFwPolicy2** ppNetFwPolicy2);
 
 public slots:
+
+    void startPruneTimer();
+
+    void stopPruneTimer();
 
     /**
      * Prune old rules.
@@ -110,15 +121,12 @@ public slots:
     void pruneRules(uint64_t ttl = DEFAULT_TTL);
 
 private:
-
-    static HRESULT WFCOMInitialize(INetFwPolicy2** ppNetFwPolicy2);
-
     BSTR _ruleGroup;
     INetFwPolicy2* _pNetFwPolicy2 = nullptr;
     INetFwRules* _pNetFwRules = nullptr;
     HRESULT _hrComInit;
     long _currentProfilesBitMask = 0;
-    std::wregex _descDatePattern{L".*\\[(.*)\\].*"};
+    const std::wregex _descDatePattern{L".*\\[(.*)\\].*"};
     uint64_t _ttl = DEFAULT_TTL;
     uint64_t _gracePeriod = DEFAULT_GRACE_PERIOD;
     QTimer* _pruneTimer;

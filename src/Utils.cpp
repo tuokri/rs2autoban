@@ -1,11 +1,15 @@
 #include <stdexcept>
 #include <cinttypes>
+#include <exception>
 
 #include "Utils.hpp"
 
 #define MAX_DATE_LEN 26
 
-std::wstring Utils::HRESULTToWString(HRESULT hr)
+namespace Utils
+{
+
+std::wstring HRESULTToWString(HRESULT hr)
 {
     LPWSTR messageBuffer = nullptr;
     DWORD dwFlags = FORMAT_MESSAGE_ALLOCATE_BUFFER
@@ -28,7 +32,7 @@ std::wstring Utils::HRESULTToWString(HRESULT hr)
     return message;
 }
 
-std::wstring Utils::Utf8ToWide(std::string var)
+std::wstring Utf8ToWide(std::string var)
 {
     std::string str = std::move(var);
 
@@ -53,7 +57,7 @@ std::wstring Utils::Utf8ToWide(std::string var)
     return wstr;
 }
 
-std::tm Utils::DateNow()
+std::tm DateNow()
 {
     std::tm tmNow{};
     int64_t now;
@@ -70,22 +74,38 @@ std::tm Utils::DateNow()
     return tmNow;
 }
 
-std::wstring Utils::ISO8601DateNow()
+std::wstring TmToISO8601WStr(std::tm tm)
 {
     WCHAR buf[MAX_DATE_LEN] = {L'\0'};
 
-    std::tm timeNow = Utils::DateNow();
-    wcsftime(buf, MAX_DATE_LEN, L"%FT%TZ", &timeNow);
+    if (!IsValidTm(tm))
+    {
+        throw std::invalid_argument("invalid tm argument");
+    }
 
-    return std::wstring(buf);
+    wcsftime(buf, MAX_DATE_LEN, L"%FT%TZ", &tm);
+
+    return {buf};
 }
 
-std::tm Utils::ISO8601WStrToTime(const WCHAR* str)
+std::wstring ISO8601DateNow()
+{
+    return TmToISO8601WStr(DateNow());
+}
+
+std::tm ISO8601WStrToTime(const WCHAR* str)
 {
     std::tm tm{0};
-    swscanf_s(str, L"%d-%d-%dT%d:%d:%dZ",
-              &tm.tm_year, &tm.tm_mon, &tm.tm_mday,
-              &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
+
+    // TODO: returns number of converted args...
+    int converted = swscanf_s(str, L"%d-%d-%dT%d:%d:%dZ",
+                              &tm.tm_year, &tm.tm_mon, &tm.tm_mday,
+                              &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
+
+    if (converted != 6)
+    {
+        throw std::invalid_argument("invalid ISO8601 date string");
+    }
 
     tm.tm_year -= 1900;
     tm.tm_isdst = -1;
@@ -94,8 +114,26 @@ std::tm Utils::ISO8601WStrToTime(const WCHAR* str)
     return tm;
 }
 
-std::tm Utils::ISO8601WStrToTime(std::wstring str)
+std::tm ISO8601WStrToTime(std::wstring str)
 {
     std::wstring var = std::move(str);
     return Utils::ISO8601WStrToTime(var.c_str());
+}
+
+bool IsValidTm(const std::tm& tm)
+{
+    auto cpy = tm;
+
+    // http://en.cppreference.com/w/cpp/chrono/c/mktime
+    //   Note: "The values in time are permitted to be outside their normal ranges."
+    const auto as_time_t = std::mktime(&cpy);
+
+    localtime_s(&cpy, &as_time_t);
+
+    return ((tm.tm_mday == cpy.tm_mday)
+            && (tm.tm_mon == cpy.tm_mon)
+            && (tm.tm_year == cpy.tm_year)
+            && (tm.tm_wday == cpy.tm_wday));
+}
+
 }

@@ -1,22 +1,42 @@
 #include <cinttypes>
+#include <csignal>
+
+#include <io.h>
+#include <fcntl.h>
 
 #include <QCoreApplication>
 #include <QFileSystemWatcher>
 #include <QCommandLineParser>
 #include <QLoggingCategory>
+#include <QtGlobal>
 
-Q_DECLARE_LOGGING_CATEGORY(mainProg)
+// TODO: Rethink these categories...
+Q_LOGGING_CATEGORY(mainInfo, "Main.Info", QtInfoMsg)
 
-Q_LOGGING_CATEGORY(mainProg, "Main")
+Q_LOGGING_CATEGORY(mainCritical, "Main.Critical", QtCriticalMsg)
+
+Q_LOGGING_CATEGORY(mainWarn, "Main.Warning", QtWarningMsg)
+
+Q_LOGGING_CATEGORY(mainDebug, "Main.Debug", QtDebugMsg)
 
 #include "Firewall.hpp"
 #include "LogWatcher.hpp"
 
-int __cdecl main(int argc, char* argv[])
+Firewall::Manager* manager = nullptr;
+
+int __cdecl wmain(int argc, char* argv[])
 {
+    _setmode(_fileno(stdout), _O_U16TEXT);
+
     QCoreApplication a(argc, argv);
+
+    // std::signal(SIGINT, sigHandler);
+    // std::signal(SIGTERM, sigHandler);
+
     QCoreApplication::setApplicationVersion("0.0.1");
     QCoreApplication::setApplicationName("RS2Autoban");
+
+    qSetMessagePattern("%{time} %{category}: %{message}");
 
     QCommandLineParser parser;
 
@@ -48,9 +68,9 @@ int __cdecl main(int argc, char* argv[])
     QStringList logs;
     if (parser.isSet(logOption))
     {
-        qCDebug(mainProg) << "logOption is set";
+        qCDebug(mainDebug) << "logOption is set";
         logs = parser.values(logOption);
-        qCDebug(mainProg) << logs.size() << "log value(s)";
+        qCDebug(mainDebug) << logs.size() << "log value(s)";
     }
 
     bool ok = false;
@@ -62,8 +82,8 @@ int __cdecl main(int argc, char* argv[])
     if (!ok)
     {
         ttl = Firewall::Manager::DEFAULT_TTL;
-        qCInfo(mainProg) << "using default TTL"
-                         << Firewall::Manager::DEFAULT_TTL;
+        qCInfo(mainInfo) << "using default TTL"
+                         << ttl;
     }
 
     ok = false;
@@ -75,10 +95,11 @@ int __cdecl main(int argc, char* argv[])
     if (!ok)
     {
         gracePeriod = Firewall::Manager::DEFAULT_GRACE_PERIOD;
-        qCInfo(mainProg) << "using default grace period"
-                         << Firewall::Manager::DEFAULT_GRACE_PERIOD;
+        qCInfo(mainInfo) << "using default grace period"
+                         << gracePeriod;
     }
 
+    /*
     LogWatcher watcher;
     ok = false;
     for (const QString& log: logs)
@@ -86,38 +107,52 @@ int __cdecl main(int argc, char* argv[])
         ok = watcher.addLogPath(log);
         if (ok)
         {
-            qCInfo(mainProg) << "watching" << log;
+            qCInfo(mainInfo) << "watching" << log;
         }
         else
         {
-            qCWarning(mainProg) << "error adding"
+            qCWarning(mainWarn) << "error adding"
                                 << log << "to watch list";
         }
     }
+    */
 
-    qCDebug(mainProg) << "initializing firewall manager";
-    Firewall::Manager manager{ttl, gracePeriod};
-    qCDebug(mainProg) << "firewall manager initialized";
-
-    try
-    {
-        manager.addBlockInboundAddressRule(L"192.168.1.233");
-        manager.addBlockInboundAddressRule(L"192.168.1.234");
-        manager.addBlockInboundAddressRule(L"192.168.1.235");
-    }
-    catch (const Firewall::GenericError& e)
-    {
-        qCWarning(mainProg) << QString::fromStdWString(e.w_what());
-    }
+    qCDebug(mainDebug) << "initializing firewall manager";
+    // manager = new Firewall::Manager{ttl, gracePeriod};
+    qCDebug(mainDebug) << "firewall manager initialized";
 
     try
     {
-        manager.pruneRules(ttl);
+        // manager->addBlockInboundAddressRule(L"192.168.1.234");
+        // manager->addBlockInboundAddressRule(L"192.168.1.235");
+        // manager->addBlockInboundAddressRule(L"192.168.1.233");
     }
     catch (const Firewall::GenericError& e)
     {
-        qCWarning(mainProg) << QString::fromStdWString(e.w_what());
+        qCWarning(mainWarn) << QString::fromStdWString(e.w_what());
     }
 
-    return QCoreApplication::exec();
+    try
+    {
+        // manager->pruneRules(ttl);
+    }
+    catch (const Firewall::GenericError& e)
+    {
+        qCWarning(mainWarn) << QString::fromStdWString(e.w_what());
+    }
+
+    // manager->startPruneTimer();
+
+    qCInfo(mainInfo) << "running, press CTRL+C to exit";
+
+    auto ret = QCoreApplication::exec();
+
+    qCInfo(mainInfo) << "exiting";
+
+    if (manager != nullptr)
+    {
+        manager->deleteLater();
+    }
+
+    return ret;
 }

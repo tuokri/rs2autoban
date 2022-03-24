@@ -24,7 +24,6 @@ LogWatcher::LogWatcher(QObject* parent)
 
 LogWatcher::~LogWatcher()
 {
-    delete _watcher;
 }
 
 bool LogWatcher::addLogPath(const QString& file)

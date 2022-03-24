@@ -1,6 +1,7 @@
 #include <exception>
 #include <vector>
 #include <regex>
+#include <ios>
 
 #include <Windows.h>
 #include <atlcomcli.h>
@@ -11,9 +12,10 @@
 
 Q_LOGGING_CATEGORY(fwGeneric, "Firewall.Generic")
 
+// TODO: new in init list unsafe?
 Firewall::Manager::Manager(uint64_t ttl, uint64_t gracePeriod, QObject* parent)
     : QObject(parent), _ttl(ttl),
-      _gracePeriod(gracePeriod), _pruneTimer(new QTimer())
+      _gracePeriod(gracePeriod), _pruneTimer(new QTimer(this))
 {
     _ruleGroup = SysAllocString(RS2AUTOBAN_GROUP_NAME);
     if (_ruleGroup == nullptr)
@@ -67,14 +69,6 @@ Firewall::Manager::Manager(uint64_t ttl, uint64_t gracePeriod, QObject* parent)
     {
         _currentProfilesBitMask ^= NET_FW_PROFILE2_PUBLIC; // NOLINT(hicpp-signed-bitwise)
     }
-
-    // TODO: Modularize?
-    _pruneTimer->setInterval(60 * 1000);
-    _pruneTimer->setSingleShot(false);
-    _pruneTimer->start();
-
-    connect(_pruneTimer, &QTimer::timeout, this, [this]()
-    { this->pruneRules(); });
 }
 
 Firewall::Manager::~Manager()
@@ -95,8 +89,6 @@ Firewall::Manager::~Manager()
     {
         CoUninitialize();
     }
-
-    delete _pruneTimer;
 }
 
 void Firewall::Manager::addBlockInboundAddressRule(const WCHAR* address)
@@ -207,7 +199,10 @@ void Firewall::Manager::pruneRules(uint64_t ttl)
 {
     if (ttl > INT64_MAX)
     {
-        qCWarning(fwGeneric) << "TTL larger than INT64_MAX, clamping to INT64_MAX";
+        qCWarning(fwGeneric)
+            << "TTL larger than INT64_MAX, clamping to INT64_MAX"
+            << "(" << INT64_MAX << ")";
+
         ttl = INT64_MAX;
     }
     auto sanitizedTtl = static_cast<int64_t>(ttl);
@@ -228,7 +223,7 @@ void Firewall::Manager::pruneRules(uint64_t ttl)
 
     long netFwRuleCount;
 
-    _pNetFwPolicy2->get_Rules(&_pNetFwRules);
+    hr = _pNetFwPolicy2->get_Rules(&_pNetFwRules);
     if (FAILED(hr))
     {
         goto Cleanup;
@@ -261,6 +256,7 @@ void Firewall::Manager::pruneRules(uint64_t ttl)
             {
                 hr = var.ChangeType(VT_DISPATCH);
             }
+
             if (SUCCEEDED(hr))
             {
                 hr = (V_DISPATCH(&var))->QueryInterface(
@@ -326,6 +322,16 @@ void Firewall::Manager::pruneRules(uint64_t ttl)
         pNetFwRule->Release();
     }
 
+    if (pEnumerator != nullptr)
+    {
+        pEnumerator->Release();
+    }
+
+    if (pVariant != nullptr)
+    {
+        pVariant->Release();
+    }
+
     if (FAILED(hr))
     {
         throw Firewall::GenericError("pruneRules failed", hr);
@@ -340,4 +346,36 @@ HRESULT Firewall::Manager::WFCOMInitialize(INetFwPolicy2** ppNetFwPolicy2)
         CLSCTX_INPROC_SERVER,
         __uuidof(INetFwPolicy2),
         reinterpret_cast<void**>(ppNetFwPolicy2));
+}
+
+void Firewall::Manager::setTtl(uint64_t ttl)
+{
+    _ttl = ttl;
+}
+
+void Firewall::Manager::setGracePeriod(uint64_t gracePeriod)
+{
+    _gracePeriod = gracePeriod;
+}
+
+void Firewall::Manager::startPruneTimer()
+{
+    if (_pruneTimer != nullptr)
+    {
+        // TODO: Modularize?
+        _pruneTimer->setInterval(60 * 1000);
+        _pruneTimer->setSingleShot(false);
+        _pruneTimer->start();
+
+        connect(_pruneTimer, &QTimer::timeout, this, [this]()
+        { this->pruneRules(); });
+    }
+}
+
+void Firewall::Manager::stopPruneTimer()
+{
+    if (_pruneTimer != nullptr)
+    {
+        _pruneTimer->stop();
+    }
 }
