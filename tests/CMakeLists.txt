@@ -1,3 +1,5 @@
+enable_testing()
+
 Include(FetchContent)
 
 FetchContent_Declare(
@@ -23,7 +25,8 @@ target_link_libraries(
     oleaut32.lib
     Qt6::Core
     Qt6::Sql
-    Catch2::Catch2)
+    Catch2::Catch2
+)
 
 target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/src/)
 
