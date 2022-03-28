@@ -12,6 +12,12 @@
 
 Q_LOGGING_CATEGORY(fwGeneric, "Firewall.Generic")
 
+#ifdef DEBUGMEMLEAK
+#ifdef _DEBUG
+#define new new( _NORMAL_BLOCK , __FILE__ , __LINE__ )
+#endif
+#endif
+
 // TODO: new in init list unsafe?
 Firewall::Manager::Manager(uint64_t ttl, uint64_t gracePeriod, QObject* parent)
     : QObject(parent), _ttl(ttl),
@@ -181,10 +187,9 @@ void Firewall::Manager::addBlockInboundAddressRule(const WCHAR* address)
     }
 }
 
-void Firewall::Manager::addBlockInboundAddressRule(std::wstring address)
+void Firewall::Manager::addBlockInboundAddressRule(const std::wstring& address)
 {
-    std::wstring var = std::move(address);
-    Firewall::Manager::addBlockInboundAddressRule(var.c_str());
+    Firewall::Manager::addBlockInboundAddressRule(address.c_str());
 }
 
 void Firewall::Manager::addBlockInboundAddressRule(const QString& address)
@@ -197,13 +202,13 @@ void Firewall::Manager::addBlockInboundAddressRule(const QString& address)
 // TODO: Refactor.
 void Firewall::Manager::pruneRules(uint64_t ttl)
 {
-    if (ttl > INT64_MAX)
+    if (ttl > std::numeric_limits<int64_t>::max())
     {
         qCWarning(fwGeneric)
             << "TTL larger than INT64_MAX, clamping to INT64_MAX"
             << "(" << INT64_MAX << ")";
 
-        ttl = INT64_MAX;
+        ttl = std::numeric_limits<int64_t>::max();
     }
     auto sanitizedTtl = static_cast<int64_t>(ttl);
 
@@ -379,3 +384,9 @@ void Firewall::Manager::stopPruneTimer()
         _pruneTimer->stop();
     }
 }
+
+#ifdef DEBUGMEMLEAK
+#ifdef _DEBUG
+#undef new
+#endif
+#endif

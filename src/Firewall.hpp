@@ -53,7 +53,7 @@ public:
         std::wstringstream ss;
         ss << _wmsg << L" "
            << L"(0x" << std::hex << _hr << L") "
-           << Utils::HRESULTToWString(_hr) << L'\0';
+           << Utils::HRESULTToWString(_hr);
         return ss.str();
     };
 
@@ -90,7 +90,7 @@ public:
      *
      * @param address Remote address.
      */
-    void addBlockInboundAddressRule(std::wstring address);
+    void addBlockInboundAddressRule(const std::wstring& address);
 
     /**
      * Add rule blocking inbound connections from address.
